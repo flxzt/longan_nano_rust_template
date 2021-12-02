@@ -3,38 +3,42 @@
 
 const FRAME_TIME: u32 = 20;
 
-use embedded_graphics::style::PrimitiveStyle;
-use panic_halt as _;
-
+use embedded_graphics::mono_font::ascii::FONT_6X10;
+use embedded_graphics::mono_font::MonoTextStyle;
 use embedded_graphics::pixelcolor::{raw::RawU16, Rgb565};
 use embedded_graphics::prelude::*;
-use embedded_graphics::primitive_style;
-use embedded_graphics::primitives::{Rectangle, Triangle};
+use embedded_graphics::primitives::{PrimitiveStyle, PrimitiveStyleBuilder, Rectangle, Triangle};
+use embedded_graphics::text::Text;
+
 use embedded_hal::blocking::delay::DelayMs;
 use longan_nano::hal::{delay::McycleDelay, pac, prelude::*};
 use longan_nano::lcd::{self, Lcd};
 use longan_nano::lcd_pins;
 use longan_nano::led::{rgb, Led};
+use panic_halt as _;
 use riscv_rt::entry;
 
-fn draw_rect<C>(lcd: &mut Lcd, c: C, ul: (i32, i32), lr: (i32, i32))
+fn draw_area<C>(lcd: &mut Lcd, c: C, ul: (i32, i32), lr: (i32, i32))
 where
     C: Into<Rgb565>,
 {
-    let rect = Rectangle::new(Point::new(ul.0, ul.1), Point::new(lr.0, lr.1));
-    let _ = rect
-        .into_styled(primitive_style!(fill_color = c.into()))
-        .draw(lcd);
+    let style = PrimitiveStyleBuilder::new()
+        .fill_color(c.into())
+        .build();
+
+    let rect = Rectangle::new(
+        Point::new(ul.0, ul.1),
+        Size::new((lr.0 - ul.0) as u32, (lr.1 - ul.1) as u32),
+    );
+    let _ = rect.into_styled(style).draw(lcd);
 }
 
 fn draw_triangle<C>(lcd: &mut Lcd, c: C, p0: Point, p1: Point, p2: Point)
 where
     C: Into<Rgb565>,
 {
-    // Triangle with red 1 px wide stroke
-    let _ = Triangle::new(p0, p1, p2)
-        .into_styled(PrimitiveStyle::with_stroke(c.into(), 1))
-        .draw(lcd);
+    let style = PrimitiveStyle::with_stroke(c.into(), 1);
+    let _ = Triangle::new(p0, p1, p2).into_styled(style).draw(lcd);
 }
 
 #[entry]
@@ -70,7 +74,7 @@ fn main() -> ! {
     }
 
     // Clear screen
-    draw_rect(
+    draw_area(
         &mut lcd,
         RawU16::from(0u16),
         (0, 0),
@@ -90,6 +94,12 @@ fn main() -> ! {
         (0x00 << 11) + (0x03 << 5) + 0x1f,
     ];
 
+    // Create a new character style
+    let style = MonoTextStyle::new(&FONT_6X10, Rgb565::WHITE);
+
+    // Create a text at given position and draw it using the previously defined style
+    let _ = Text::new("Hello Rust!", Point::new(20, 30), style).draw(&mut lcd);
+
     let (p0, p1, p2) = (Point::new(50, 20), Point::new(110, 20), Point::new(80, 60));
 
     loop {
@@ -98,7 +108,7 @@ fn main() -> ! {
         c = (c + 1) % m;
         leds[c / 64].on();
 
-        draw_triangle(&mut lcd,RawU16::from(BALL_COLORS[c / 24]), p0, p1, p2);
+        draw_triangle(&mut lcd, RawU16::from(BALL_COLORS[c / 24]), p0, p1, p2);
 
         // Limit update rate to FRAME_TIME
         delay.delay_ms(FRAME_TIME);
